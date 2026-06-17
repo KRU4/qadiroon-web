@@ -9,7 +9,16 @@ import { SplashIntro } from "./components/SplashIntro";
 import { LandingSpotlight } from "./components/LandingSpotlight";
 import { LandingAbout } from "./components/LandingAbout";
 import { CodeSnippetsInjector } from "./components/CodeSnippetsInjector";
+import { CategoryCards } from "./components/CategoryCards";
+import { MostRequestedServices } from "./components/MostRequestedServices";
+import { WeeklyPoll } from "./components/WeeklyPoll";
+import { JobOpportunities } from "./components/JobOpportunities";
+import { NewsGrid } from "./components/NewsGrid";
+import { PartnersAdsCarousel } from "./components/PartnersAdsCarousel";
+import { SuccessStories } from "./components/SuccessStories";
+import { GovernmentServices } from "./components/GovernmentServices";
 import { useAnimationContext } from "../context/AnimationContext";
+import { usePublicDataContext } from "../context/PublicDataContext";
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -18,6 +27,7 @@ export default function App() {
   const [fontSize, setFontSize] = useState(16);
   const [speaking, setSpeaking] = useState(false);
   const { enable: enableAnimations } = useAnimationContext();
+  const { landing } = usePublicDataContext();
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSize}px`;
@@ -106,8 +116,19 @@ export default function App() {
                 <HeroSection darkMode={darkMode} />
               </div>
 
+              <CategoryCards darkMode={darkMode} />
               <LandingSpotlight darkMode={darkMode} />
-              <LatestNews darkMode={darkMode} />
+              <div className="max-w-7xl mx-auto px-4 lg:px-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <MostRequestedServices darkMode={darkMode} items={landing.services || []} />
+                  <WeeklyPoll darkMode={darkMode} poll={landing.poll} />
+                </div>
+              </div>
+              <JobOpportunities darkMode={darkMode} jobs={landing.jobs || []} />
+              <NewsGrid darkMode={darkMode} />
+              <PartnersAdsCarousel darkMode={darkMode} />
+              <SuccessStories darkMode={darkMode} stories={landing.stories || []} />
+              <GovernmentServices darkMode={darkMode} services={landing.govt_services || []} />
               <LandingAbout darkMode={darkMode} />
             </div>
 

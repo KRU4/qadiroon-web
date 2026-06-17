@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { api, type BlogRecord, type CategoryRecord } from "../lib/api";
 import { RichTextEditor } from "./RichTextEditor";
 import { SeoPanel, type SeoData } from "./SeoPanel";
+import { ImageUploader } from "./ImageUploader";
 import { useAdminI18n } from "./AdminLanguageContext";
 import { countWords, readingTimeMinutes } from "../lib/seo";
+import { IconEye, IconX } from "@tabler/icons-react";
 
 const emptySeo: SeoData = {
   meta_title: "",
@@ -43,6 +45,7 @@ export function BlogEditor({ blogId, onSaved, onCancel }: BlogEditorProps) {
   const [editId, setEditId] = useState<number | null>(blogId ?? null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
@@ -141,13 +144,13 @@ export function BlogEditor({ blogId, onSaved, onCancel }: BlogEditorProps) {
           }
           className="w-full border rounded-lg px-3 py-2"
         />
-        <input
-          placeholder={tr("coverImage")}
-          value={form.cover_image}
-          onChange={(e) => setForm({ ...form, cover_image: e.target.value })}
-          className="w-full border rounded-lg px-3 py-2"
-          dir="ltr"
-        />
+        <div>
+          <label className="block text-sm font-medium mb-1">{tr("coverImage")}</label>
+          <ImageUploader
+            value={form.cover_image}
+            onChange={(url) => setForm({ ...form, cover_image: url })}
+          />
+        </div>
         <input
           placeholder={tr("coverImageAlt")}
           value={form.cover_image_alt}
@@ -221,6 +224,9 @@ export function BlogEditor({ blogId, onSaved, onCancel }: BlogEditorProps) {
           <button type="button" onClick={() => save()} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
             {editId ? tr("updatePage") : tr("createNew")}
           </button>
+          <button type="button" onClick={() => setPreviewOpen(true)} className="border px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
+            <IconEye size={16} /> Preview
+          </button>
           <button type="button" onClick={onCancel} className="border px-4 py-2 rounded-lg text-sm">
             {tr("cancel")}
           </button>
@@ -239,6 +245,39 @@ export function BlogEditor({ blogId, onSaved, onCancel }: BlogEditorProps) {
           }}
         />
       </div>
+
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-10 overflow-y-auto" onClick={() => setPreviewOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} dir="rtl">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <h3 className="font-bold text-lg" style={{ fontFamily: "Cairo, sans-serif" }}>Preview</h3>
+              <button onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <IconX size={20} />
+              </button>
+            </div>
+            <article className="p-6" style={{ fontFamily: "Cairo, sans-serif" }}>
+              {form.cover_image && (
+                <img src={form.cover_image} alt={form.cover_image_alt || form.title} className="w-full rounded-2xl mb-6 object-cover max-h-96" />
+              )}
+              {categories.find((c) => c.id === form.category_id) && (
+                <span className="inline-block text-sm text-blue-600 font-bold mb-2">
+                  {categories.find((c) => c.id === form.category_id)!.name}
+                </span>
+              )}
+              <h1 className="text-3xl font-black mt-2 mb-4">{form.title || "Untitled"}</h1>
+              <p className="text-sm text-gray-500 mb-6">{form.excerpt}</p>
+              <div className="prose max-w-none leading-loose" dangerouslySetInnerHTML={{ __html: form.body }} />
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-8">
+                  {tags.map((t) => (
+                    <span key={t} className="text-xs bg-gray-100 px-2 py-1 rounded-full">{t}</span>
+                  ))}
+                </div>
+              )}
+            </article>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

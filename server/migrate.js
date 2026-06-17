@@ -33,6 +33,34 @@ export function runMigrations() {
 
   addColumn("users", "totp_secret", "TEXT");
   addColumn("users", "totp_enabled", "INTEGER NOT NULL DEFAULT 0");
+  addColumn("categories", "image_url", "TEXT");
+  addColumn("ad_slots", "sort_order", "INTEGER NOT NULL DEFAULT 0");
+
+  // Remove UNIQUE constraint on ad_slots.slot_code to allow multiple ads per slot
+  const slotCodeUnique = db.prepare("PRAGMA index_list('ad_slots')").all()
+    .some((idx) => idx.name === 'sqlite_autoindex_ad_slots_1');
+  if (slotCodeUnique) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ad_slots_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slot_code TEXT NOT NULL,
+        label TEXT NOT NULL,
+        image_url TEXT,
+        link_url TEXT,
+        width INTEGER NOT NULL DEFAULT 300,
+        height INTEGER NOT NULL DEFAULT 250,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        expires_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO ad_slots_new (id, slot_code, label, image_url, link_url, width, height, is_active, expires_at, sort_order, created_at, updated_at)
+        SELECT id, slot_code, label, image_url, link_url, width, height, is_active, expires_at, 0 as sort_order, created_at, updated_at FROM ad_slots;
+      DROP TABLE ad_slots;
+      ALTER TABLE ad_slots_new RENAME TO ad_slots;
+    `);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tags (

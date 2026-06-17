@@ -22,7 +22,7 @@ function BlogListInner() {
             <Link key={b.id} to={`/blogs/${b.slug}`} className="bg-white rounded-2xl border overflow-hidden shadow-sm hover:shadow-lg transition-shadow">
               {b.cover_image && <img src={b.cover_image} alt="" className="w-full h-48 object-cover" />}
               <div className="p-5">
-                <span className="text-xs text-blue-600 font-bold">{b.category_name}</span>
+                {b.category_name && b.category_slug ? <Link to={`/categories/${b.category_slug}`} className="text-xs text-blue-600 font-bold hover:underline">{b.category_name}</Link> : <span className="text-xs text-blue-600 font-bold">{b.category_name}</span>}
                 <h2 className="font-bold mt-2 line-clamp-2">{b.title}</h2>
                 <p className="text-sm text-gray-500 mt-2 line-clamp-2">{b.excerpt}</p>
               </div>

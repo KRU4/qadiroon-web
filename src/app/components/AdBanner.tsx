@@ -139,8 +139,6 @@ export function AdBanner({
     : slotCode
       ? getActiveAd(slotCode)
       : undefined;
-  if (slotCode && (!ad || !ad.image)) return null;
-
   let resolvedWidth = ad?.width ?? width ?? 300;
   let resolvedHeight = ad?.height ?? height ?? 250;
 
@@ -153,6 +151,21 @@ export function AdBanner({
   } else if (type === "rectangle") {
     resolvedWidth = 300;
     resolvedHeight = 250;
+  }
+
+  if (slotCode && (!ad || !ad.image)) {
+    return (
+      <div className="flex flex-col items-center justify-center mx-auto" data-slot={slotCode}>
+        <div
+          className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50/50 text-center"
+          style={{ width: "100%", maxWidth: resolvedWidth, minHeight: resolvedHeight || 90, fontFamily: "Cairo, sans-serif" }}
+        >
+          <p className="text-xs text-gray-400 font-mono">{slotCode}</p>
+          <p className="text-[10px] text-gray-400 mt-1">{resolvedWidth} × {resolvedHeight}</p>
+          <p className="text-[10px] text-gray-300 mt-0.5">إعلان مباشر / Google AdSense</p>
+        </div>
+      </div>
+    );
   }
   const resolvedLabel = ad?.label ?? label;
   const image = ad?.image;

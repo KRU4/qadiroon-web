@@ -4,7 +4,7 @@ const translations = {
   en: {
     dashboard: "Dashboard",
     navbarManager: "Navbar Manager",
-    landingPage: "Landing Page",
+    landingPage: "Home Page",
     pages: "Pages",
     allPosts: "All Posts",
     categories: "Categories",

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+data/
 server/data/
 public/uploads/
 .DS_Store

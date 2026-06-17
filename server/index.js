@@ -122,24 +122,26 @@ app.get("/api/public/pages/:slug", (req, res) => {
 });
 
 app.get("/api/public/blogs", (_req, res) => {
+  const { offset, limit } = _req.query;
   const blogs = db
     .prepare(
-      `SELECT b.id, b.title, b.slug, b.cover_image, b.excerpt, b.published_at,
-              c.name as category_name, u.name as author_name
+      `SELECT b.id, b.title, b.slug, b.cover_image, b.excerpt, b.published_at, b.view_count,
+              c.name as category_name, c.slug as category_slug, u.name as author_name
        FROM blogs b
        LEFT JOIN categories c ON c.id = b.category_id
        LEFT JOIN users u ON u.id = b.author_id
        WHERE b.is_published = 1
-       ORDER BY b.published_at DESC`,
+       ORDER BY b.published_at DESC
+       LIMIT ? OFFSET ?`,
     )
-    .all();
+    .all(+(limit || 12), +(offset || 0));
   res.json(blogs);
 });
 
 app.get("/api/public/blogs/:slug", (req, res) => {
   const blog = db
     .prepare(
-      `SELECT b.*, c.name as category_name, c.description as category_description,
+      `SELECT b.*, c.name as category_name, c.slug as category_slug, c.description as category_description,
               u.name as author_name
        FROM blogs b
        LEFT JOIN categories c ON c.id = b.category_id
@@ -166,6 +168,31 @@ app.get("/api/public/landing", (_req, res) => {
   } catch {
     res.json({});
   }
+});
+
+// ── Public categories ──
+app.get("/api/public/categories", (_req, res) => {
+  const cats = db.prepare("SELECT id, name, slug, description, image_url FROM categories ORDER BY name ASC").all();
+  res.json(cats);
+});
+
+app.get("/api/public/categories/:slug", (req, res) => {
+  const cat = db.prepare("SELECT id, name, slug, description, image_url FROM categories WHERE slug = ?").get(req.params.slug);
+  if (!cat) return res.status(404).json({ error: "Category not found" });
+  const { offset, limit } = req.query;
+  const posts = db
+    .prepare(
+      `SELECT b.id, b.title, b.slug, b.cover_image, b.excerpt, b.published_at, b.view_count,
+              c.name as category_name, c.slug as category_slug, u.name as author_name
+       FROM blogs b
+       LEFT JOIN categories c ON c.id = b.category_id
+       LEFT JOIN users u ON u.id = b.author_id
+       WHERE b.category_id = ? AND b.is_published = 1
+       ORDER BY b.published_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(cat.id, +(limit || 12), +(offset || 0));
+  res.json({ category: cat, posts });
 });
 
 // ── Dashboard stats (enhanced in upgrade routes) ──
@@ -301,21 +328,21 @@ app.get("/api/admin/categories", requireAuth, (_req, res) => {
 });
 
 app.post("/api/admin/categories", requireAuth, (req, res) => {
-  const { name, slug, description, navbar_item_id } = req.body;
+  const { name, slug, description, image_url, navbar_item_id } = req.body;
   const r = db
     .prepare(
-      "INSERT INTO categories (name, slug, description, navbar_item_id) VALUES (?, ?, ?, ?)",
+      "INSERT INTO categories (name, slug, description, image_url, navbar_item_id) VALUES (?, ?, ?, ?, ?)",
     )
-    .run(name, slug, description || "", navbar_item_id || null);
+    .run(name, slug, description || "", image_url || "", navbar_item_id || null);
   logAudit(req.user, "category_created", "category", r.lastInsertRowid);
   res.json({ id: r.lastInsertRowid });
 });
 
 app.put("/api/admin/categories/:id", requireAuth, (req, res) => {
-  const { name, slug, description, navbar_item_id } = req.body;
+  const { name, slug, description, image_url, navbar_item_id } = req.body;
   db.prepare(
-    "UPDATE categories SET name=?, slug=?, description=?, navbar_item_id=? WHERE id=?",
-  ).run(name, slug, description, navbar_item_id || null, req.params.id);
+    "UPDATE categories SET name=?, slug=?, description=?, image_url=?, navbar_item_id=? WHERE id=?",
+  ).run(name, slug, description || "", image_url || "", navbar_item_id || null, req.params.id);
   res.json({ ok: true });
 });
 
@@ -434,11 +461,27 @@ app.get("/api/admin/ads", requireAuth, (_req, res) => {
   res.json(db.prepare("SELECT * FROM ad_slots ORDER BY slot_code ASC").all());
 });
 
+app.post("/api/admin/ads", requireAuth, (req, res) => {
+  const { slot_code, label, image_url, link_url, width, height, sort_order, is_active, expires_at } = req.body;
+  const r = db.prepare(
+    `INSERT INTO ad_slots (slot_code, label, image_url, link_url, width, height, sort_order, is_active, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(slot_code, label || "", image_url || "", link_url || "", width || 300, height || 250, sort_order ?? 0, is_active ? 1 : 0, expires_at || null);
+  logAudit(req.user, "ad_created", "ad", r.lastInsertRowid);
+  res.json({ id: r.lastInsertRowid });
+});
+
 app.put("/api/admin/ads/:id", requireAuth, (req, res) => {
-  const { label, image_url, link_url, width, height, is_active, expires_at } = req.body;
+  const { label, image_url, link_url, width, height, sort_order, is_active, expires_at } = req.body;
   db.prepare(
-    `UPDATE ad_slots SET label=?, image_url=?, link_url=?, width=?, height=?, is_active=?, expires_at=?, updated_at=datetime('now') WHERE id=?`,
-  ).run(label, image_url, link_url, width, height, is_active ? 1 : 0, expires_at || null, req.params.id);
+    `UPDATE ad_slots SET label=?, image_url=?, link_url=?, width=?, height=?, sort_order=?, is_active=?, expires_at=?, updated_at=datetime('now') WHERE id=?`,
+  ).run(label || "", image_url || "", link_url || "", width || 300, height || 250, sort_order ?? 0, is_active ? 1 : 0, expires_at || null, req.params.id);
+  logAudit(req.user, "ad_updated", "ad", +req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/ads/:id", requireAuth, (req, res) => {
+  db.prepare("DELETE FROM ad_slots WHERE id = ?").run(req.params.id);
+  logAudit(req.user, "ad_deleted", "ad", +req.params.id);
   res.json({ ok: true });
 });
 

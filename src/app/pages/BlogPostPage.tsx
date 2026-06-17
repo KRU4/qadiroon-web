@@ -43,7 +43,7 @@ function BlogPostInner() {
           items={[
             { label: "الرئيسية", href: "/" },
             { label: "الأخبار", href: "/blogs" },
-            ...(blog.category_name ? [{ label: blog.category_name }] : []),
+            ...(blog.category_name && blog.category_slug ? [{ label: blog.category_name, href: `/categories/${blog.category_slug}` }] : blog.category_name ? [{ label: blog.category_name }] : []),
             { label: blog.title },
           ]}
         />
@@ -55,7 +55,7 @@ function BlogPostInner() {
             loading="lazy"
           />
         )}
-        <span className="text-sm text-blue-600 font-bold">{blog.category_name}</span>
+        {blog.category_name && blog.category_slug ? <a href={`/categories/${blog.category_slug}`} className="text-sm text-blue-600 font-bold hover:underline">{blog.category_name}</a> : <span className="text-sm text-blue-600 font-bold">{blog.category_name}</span>}
         <h1 className="text-3xl font-black mt-2 mb-4">{blog.title}</h1>
         <p className="text-sm text-gray-500 mb-6">
           {blog.author_name} · {blog.published_at?.slice(0, 10)} · {blog.view_count ?? 0} مشاهدة
