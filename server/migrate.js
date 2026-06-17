@@ -1,45 +1,49 @@
-import { db } from "./db.js";
+import { pool, query } from "./db.js";
 
-function columnExists(table, column) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-  return cols.some((c) => c.name === column);
+async function columnExists(table, column) {
+  const r = await pool.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = $1 AND column_name = $2`,
+    [table, column],
+  );
+  return r.rows.length > 0;
 }
 
-function addColumn(table, column, definition) {
-  if (!columnExists(table, column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+async function addColumn(table, column, pgType) {
+  if (!(await columnExists(table, column))) {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${pgType}`);
   }
 }
 
-export function runMigrations() {
-  addColumn("blogs", "meta_title", "TEXT");
-  addColumn("blogs", "meta_description", "TEXT");
-  addColumn("blogs", "focus_keyword", "TEXT");
-  addColumn("blogs", "canonical_url", "TEXT");
-  addColumn("blogs", "og_title", "TEXT");
-  addColumn("blogs", "og_description", "TEXT");
-  addColumn("blogs", "og_image", "TEXT");
-  addColumn("blogs", "cover_image_alt", "TEXT");
-  addColumn("blogs", "show_toc", "INTEGER NOT NULL DEFAULT 1");
-  addColumn("blogs", "toc_min_words", "INTEGER NOT NULL DEFAULT 300");
-  addColumn("blogs", "view_count", "INTEGER NOT NULL DEFAULT 0");
+export async function runMigrations() {
+  await addColumn("blogs", "meta_title", "TEXT");
+  await addColumn("blogs", "meta_description", "TEXT");
+  await addColumn("blogs", "focus_keyword", "TEXT");
+  await addColumn("blogs", "canonical_url", "TEXT");
+  await addColumn("blogs", "og_title", "TEXT");
+  await addColumn("blogs", "og_description", "TEXT");
+  await addColumn("blogs", "og_image", "TEXT");
+  await addColumn("blogs", "cover_image_alt", "TEXT");
+  await addColumn("blogs", "show_toc", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn("blogs", "toc_min_words", "INTEGER NOT NULL DEFAULT 300");
+  await addColumn("blogs", "view_count", "INTEGER NOT NULL DEFAULT 0");
 
-  addColumn("pages", "meta_title", "TEXT");
-  addColumn("pages", "focus_keyword", "TEXT");
-  addColumn("pages", "canonical_url", "TEXT");
-  addColumn("pages", "og_title", "TEXT");
-  addColumn("pages", "og_description", "TEXT");
-  addColumn("pages", "og_image", "TEXT");
+  await addColumn("pages", "meta_title", "TEXT");
+  await addColumn("pages", "focus_keyword", "TEXT");
+  await addColumn("pages", "canonical_url", "TEXT");
+  await addColumn("pages", "og_title", "TEXT");
+  await addColumn("pages", "og_description", "TEXT");
+  await addColumn("pages", "og_image", "TEXT");
 
-  addColumn("users", "totp_secret", "TEXT");
-  addColumn("users", "totp_enabled", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn("users", "totp_secret", "TEXT");
+  await addColumn("users", "totp_enabled", "INTEGER NOT NULL DEFAULT 0");
 
-  db.exec(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS tags (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       slug TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS blog_tags (
@@ -49,23 +53,23 @@ export function runMigrations() {
     );
 
     CREATE TABLE IF NOT EXISTS blog_revisions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       blog_id INTEGER REFERENCES blogs(id) ON DELETE CASCADE,
       data TEXT NOT NULL,
       created_by INTEGER REFERENCES users(id),
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS code_snippets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('head','body-start','body-end')),
       code TEXT NOT NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
       scope TEXT NOT NULL DEFAULT 'all',
       scope_target TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS site_settings (
@@ -74,7 +78,7 @@ export function runMigrations() {
     );
 
     CREATE TABLE IF NOT EXISTS forms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       embed_code TEXT NOT NULL UNIQUE,
       fields TEXT NOT NULL DEFAULT '[]',
@@ -82,62 +86,66 @@ export function runMigrations() {
       auto_reply TEXT,
       captcha_enabled INTEGER DEFAULT 0,
       is_active INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS form_submissions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       form_id INTEGER REFERENCES forms(id) ON DELETE CASCADE,
       data TEXT NOT NULL,
       is_read INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS audit_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       user_id INTEGER,
       user_name TEXT,
       action TEXT NOT NULL,
       entity_type TEXT,
       entity_id INTEGER,
       details TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS login_attempts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       email TEXT,
       ip TEXT,
       success INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS login_lockouts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       email TEXT,
       ip TEXT,
-      locked_until TEXT NOT NULL
+      locked_until TIMESTAMPTZ NOT NULL
     );
   `);
 
-  const robots = db.prepare("SELECT value FROM site_settings WHERE key = 'robots_txt'").get();
+  // Seed site_settings defaults
+  const robots = (await query("SELECT value FROM site_settings WHERE key = 'robots_txt'")).rows[0];
   if (!robots) {
-    db.prepare("INSERT INTO site_settings (key, value) VALUES (?, ?)").run(
-      "robots_txt",
-      "User-agent: *\nAllow: /\nSitemap: /sitemap.xml",
+    await query(
+      "INSERT INTO site_settings (key, value) VALUES ($1, $2)",
+      ["robots_txt", "User-agent: *\nAllow: /\nSitemap: /sitemap.xml"],
     );
   }
 
-  const perf = db.prepare("SELECT value FROM site_settings WHERE key = 'performance'").get();
+  const perf = (await query("SELECT value FROM site_settings WHERE key = 'performance'")).rows[0];
   if (!perf) {
-    db.prepare("INSERT INTO site_settings (key, value) VALUES (?, ?)").run(
-      "performance",
-      JSON.stringify({
-        cache_ttl: 3600,
-        minify_assets: false,
-        cdn_base_url: "",
-        lazy_load_images: true,
-      }),
+    await query(
+      "INSERT INTO site_settings (key, value) VALUES ($1, $2)",
+      [
+        "performance",
+        JSON.stringify({
+          cache_ttl: 3600,
+          minify_assets: false,
+          cdn_base_url: "",
+          lazy_load_images: true,
+        }),
+      ],
     );
   }
 }

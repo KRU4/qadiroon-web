@@ -1,16 +1,17 @@
-import { db } from "./db.js";
+import { query } from "./db.js";
 
-export function logAudit(user, action, entityType = null, entityId = null, details = null) {
-  db.prepare(
+export async function logAudit(user, action, entityType = null, entityId = null, details = null) {
+  await query(
     `INSERT INTO audit_log (user_id, user_name, action, entity_type, entity_id, details)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(
-    user?.id ?? null,
-    user?.name ?? "System",
-    action,
-    entityType,
-    entityId,
-    details ? JSON.stringify(details) : null,
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      user?.id ?? null,
+      user?.name ?? "System",
+      action,
+      entityType,
+      entityId,
+      details ? JSON.stringify(details) : null,
+    ],
   );
 }
 
