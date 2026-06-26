@@ -122,6 +122,8 @@ export const api = {
       request(`/admin/form-submissions/${id}/read`, { method: "PATCH" }),
     exportCsv: () => fetch(`${API_BASE}/admin/form-submissions/export`, { credentials: "include" }),
   },
+  publicCategories: () => request<CategoryRecord[]>("/public/categories"),
+  publicCategory: (slug: string) => request<{ category: CategoryRecord; posts: BlogRecord[] }>(`/public/categories/${slug}`),
   publicSnippets: () => request<PublicSnippet[]>("/public/snippets?path=" + encodeURIComponent(window.location.pathname)),
   publicForm: (embed: string) => request<PublicForm>(`/public/forms/${embed}`),
   submitForm: (embed: string, data: Record<string, string>) =>
@@ -136,8 +138,11 @@ export const api = {
   },
   ads: {
     list: () => request<AdSlotRecord[]>("/admin/ads"),
+    create: (data: Partial<AdSlotRecord>) =>
+      request<{ id: number }>("/admin/ads", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<AdSlotRecord>) =>
       request(`/admin/ads/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/admin/ads/${id}`, { method: "DELETE" }),
   },
   landing: {
     get: () => request<LandingData>("/admin/landing"),
@@ -198,6 +203,7 @@ export interface CategoryRecord {
   name: string;
   slug: string;
   description?: string;
+  image_url?: string;
   navbar_item_id?: number | null;
 }
 
@@ -211,6 +217,7 @@ export interface BlogRecord {
   body: string;
   category_id?: number | null;
   category_name?: string;
+  category_slug?: string;
   category_description?: string;
   author_name?: string;
   is_published: number;
@@ -250,6 +257,7 @@ export interface AdSlotRecord extends AdSlot {
   id: number;
   is_active: number;
   expires_at?: string | null;
+  sort_order?: number;
 }
 
 export interface DashboardStats {
@@ -357,6 +365,52 @@ export interface SpotlightItem {
   sort_order: number;
 }
 
+export interface ServiceItem {
+  rank: number;
+  name: string;
+  count: string;
+  color: string;
+}
+
+export interface PollOption {
+  label: string;
+  percent: number;
+}
+
+export interface PollData {
+  question: string;
+  options: PollOption[];
+  totalVotes: number;
+}
+
+export interface JobItem {
+  id: string;
+  title: string;
+  company: string;
+  companyLogo: string;
+  location: string;
+  postedDate: string;
+  salary: string;
+  type: string;
+  tags: string[];
+}
+
+export interface StoryItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  image: string;
+}
+
+export interface GovtServiceItem {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  authority: string;
+  badge: string;
+}
+
 export interface LandingData {
   hero_title: string;
   hero_subtitle: string;
@@ -364,4 +418,9 @@ export interface LandingData {
   breaking_ticker: string;
   spotlight: SpotlightItem[];
   about_content: string;
+  services: ServiceItem[];
+  poll: PollData;
+  jobs: JobItem[];
+  stories: StoryItem[];
+  govt_services: GovtServiceItem[];
 }

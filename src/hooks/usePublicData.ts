@@ -12,6 +12,11 @@ export const emptyLanding: LandingData = {
   breaking_ticker: "",
   spotlight: [],
   about_content: "",
+  services: [],
+  poll: { question: "", options: [], totalVotes: 0 },
+  jobs: [],
+  stories: [],
+  govt_services: [],
 };
 
 export function usePublicData() {
@@ -36,6 +41,11 @@ export function usePublicData() {
           ...landingData,
           stats: landingData.stats?.length === 3 ? landingData.stats : emptyLanding.stats,
           spotlight: landingData.spotlight ?? [],
+          services: landingData.services ?? [],
+          poll: landingData.poll ?? emptyLanding.poll,
+          jobs: landingData.jobs ?? [],
+          stories: landingData.stories ?? [],
+          govt_services: landingData.govt_services ?? [],
         });
         setBlogs(blogList);
       })

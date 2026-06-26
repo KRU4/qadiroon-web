@@ -114,22 +114,25 @@ app.get("/api/public/pages/:slug", async (req, res) => {
   res.json(page);
 });
 
-app.get("/api/public/blogs", async (_req, res) => {
+app.get("/api/public/blogs", async (req, res) => {
+  const { offset, limit } = req.query;
   const blogs = (await query(
-    `SELECT b.id, b.title, b.slug, b.cover_image, b.excerpt, b.published_at,
-            c.name as category_name, u.name as author_name
+    `SELECT b.id, b.title, b.slug, b.cover_image, b.excerpt, b.published_at, b.view_count,
+            c.name as category_name, c.slug as category_slug, u.name as author_name
      FROM blogs b
      LEFT JOIN categories c ON c.id = b.category_id
      LEFT JOIN users u ON u.id = b.author_id
      WHERE b.is_published = 1
-     ORDER BY b.published_at DESC`,
+     ORDER BY b.published_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit || 12, offset || 0],
   )).rows;
   res.json(blogs);
 });
 
 app.get("/api/public/blogs/:slug", async (req, res) => {
   const blog = (await query(
-    `SELECT b.*, c.name as category_name, c.description as category_description,
+    `SELECT b.*, c.name as category_name, c.slug as category_slug, c.description as category_description,
             u.name as author_name
      FROM blogs b
      LEFT JOIN categories c ON c.id = b.category_id
@@ -150,6 +153,30 @@ app.get("/api/public/landing", async (_req, res) => {
   const row = (await query("SELECT data FROM landing_content WHERE id = 1")).rows[0];
   if (!row) return res.json({});
   try { res.json(JSON.parse(row.data)); } catch { res.json({}); }
+});
+
+// ── Public categories ──
+app.get("/api/public/categories", async (_req, res) => {
+  const cats = (await query("SELECT id, name, slug, description, image_url FROM categories ORDER BY name ASC")).rows;
+  res.json(cats);
+});
+
+app.get("/api/public/categories/:slug", async (req, res) => {
+  const cat = (await query("SELECT id, name, slug, description, image_url FROM categories WHERE slug = $1", [req.params.slug])).rows[0];
+  if (!cat) return res.status(404).json({ error: "Category not found" });
+  const { offset, limit } = req.query;
+  const posts = (await query(
+    `SELECT b.id, b.title, b.slug, b.cover_image, b.excerpt, b.published_at, b.view_count,
+            c.name as category_name, c.slug as category_slug, u.name as author_name
+     FROM blogs b
+     LEFT JOIN categories c ON c.id = b.category_id
+     LEFT JOIN users u ON u.id = b.author_id
+     WHERE b.category_id = $1 AND b.is_published = 1
+     ORDER BY b.published_at DESC
+     LIMIT $2 OFFSET $3`,
+    [cat.id, limit || 12, offset || 0],
+  )).rows;
+  res.json({ category: cat, posts });
 });
 
 // ── Dashboard stats ──
@@ -274,20 +301,20 @@ app.get("/api/admin/categories", requireAuth, async (_req, res) => {
 });
 
 app.post("/api/admin/categories", requireAuth, async (req, res) => {
-  const { name, slug, description, navbar_item_id } = req.body;
+  const { name, slug, description, image_url, navbar_item_id } = req.body;
   const r = (await query(
-    "INSERT INTO categories (name, slug, description, navbar_item_id) VALUES ($1,$2,$3,$4) RETURNING id",
-    [name, slug, description || "", navbar_item_id || null],
+    "INSERT INTO categories (name, slug, description, image_url, navbar_item_id) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+    [name, slug, description || "", image_url || "", navbar_item_id || null],
   )).rows[0];
   await logAudit(req.user, "category_created", "category", r.id);
   res.json({ id: r.id });
 });
 
 app.put("/api/admin/categories/:id", requireAuth, async (req, res) => {
-  const { name, slug, description, navbar_item_id } = req.body;
+  const { name, slug, description, image_url, navbar_item_id } = req.body;
   await query(
-    "UPDATE categories SET name=$1, slug=$2, description=$3, navbar_item_id=$4 WHERE id=$5",
-    [name, slug, description, navbar_item_id || null, req.params.id],
+    "UPDATE categories SET name=$1, slug=$2, description=$3, image_url=$4, navbar_item_id=$5 WHERE id=$6",
+    [name, slug, description || "", image_url || "", navbar_item_id || null, req.params.id],
   );
   res.json({ ok: true });
 });
@@ -408,12 +435,29 @@ app.get("/api/admin/ads", requireAuth, async (_req, res) => {
   res.json((await query("SELECT * FROM ad_slots ORDER BY slot_code ASC")).rows);
 });
 
+app.post("/api/admin/ads", requireAuth, async (req, res) => {
+  const { slot_code, label, image_url, link_url, width, height, sort_order, is_active, expires_at } = req.body;
+  const r = (await query(
+    `INSERT INTO ad_slots (slot_code, label, image_url, link_url, width, height, sort_order, is_active, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [slot_code, label || "", image_url || "", link_url || "", width || 300, height || 250, sort_order ?? 0, is_active ? 1 : 0, expires_at || null],
+  )).rows[0];
+  await logAudit(req.user, "ad_created", "ad", r.id);
+  res.json({ id: r.id });
+});
+
 app.put("/api/admin/ads/:id", requireAuth, async (req, res) => {
-  const { label, image_url, link_url, width, height, is_active, expires_at } = req.body;
+  const { label, image_url, link_url, width, height, sort_order, is_active, expires_at } = req.body;
   await query(
-    `UPDATE ad_slots SET label=$1, image_url=$2, link_url=$3, width=$4, height=$5, is_active=$6, expires_at=$7, updated_at=NOW() WHERE id=$8`,
-    [label, image_url, link_url, width, height, is_active ? 1 : 0, expires_at || null, req.params.id],
+    `UPDATE ad_slots SET label=$1, image_url=$2, link_url=$3, width=$4, height=$5, sort_order=$6, is_active=$7, expires_at=$8, updated_at=NOW() WHERE id=$9`,
+    [label || "", image_url || "", link_url || "", width || 300, height || 250, sort_order ?? 0, is_active ? 1 : 0, expires_at || null, req.params.id],
   );
+  await logAudit(req.user, "ad_updated", "ad", +req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/ads/:id", requireAuth, async (req, res) => {
+  await query("DELETE FROM ad_slots WHERE id = $1", [req.params.id]);
+  await logAudit(req.user, "ad_deleted", "ad", +req.params.id);
   res.json({ ok: true });
 });
 

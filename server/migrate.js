@@ -37,6 +37,8 @@ export async function runMigrations() {
 
   await addColumn("users", "totp_secret", "TEXT");
   await addColumn("users", "totp_enabled", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn("categories", "image_url", "TEXT");
+  await addColumn("ad_slots", "sort_order", "INTEGER NOT NULL DEFAULT 0");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tags (
